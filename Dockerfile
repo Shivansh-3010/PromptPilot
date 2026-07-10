@@ -1,5 +1,5 @@
 # Multi-stage Docker build optimized for Render / Fly.io free tiers
-FROM node:20-alpine AS builder
+FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ COPY src ./src/
 RUN npm run build
 
 # Production runtime stage
-FROM node:20-alpine AS runner
+FROM node:20-bookworm-slim AS runner
 
 WORKDIR /app
 ENV NODE_ENV=production
