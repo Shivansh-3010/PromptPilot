@@ -5,6 +5,7 @@ WORKDIR /app
 
 # Copy package manifests and install dependencies
 COPY package*.json ./
+RUN apt-get update && apt-get install -y openssl
 RUN npm ci
 
 # Copy Prisma schema and generate client
@@ -24,6 +25,7 @@ ENV NODE_ENV=production
 
 # Install production dependencies only
 COPY package*.json ./
+RUN apt-get update && apt-get install -y openssl
 RUN npm ci --only=production
 
 # Copy generated Prisma client from builder
