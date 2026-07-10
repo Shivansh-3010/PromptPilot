@@ -33,7 +33,13 @@ export class WebhookController {
     // Validate HMAC-SHA256 signature if appSecret is configured in production
     if (config.whatsapp.appSecret && config.whatsapp.appSecret !== 'test_app_secret' && config.server.env === 'production') {
       const signatureHeader = req.headers['x-hub-signature-256'] as string;
-      if (!signatureHeader || !WebhookController.validateSignature(req.rawBody || JSON.stringify(req.body), signatureHeader)) {
+      if (
+  	!signatureHeader ||
+  	!WebhookController.validateSignature(
+    	JSON.stringify(req.body),
+    	signatureHeader
+  	)
+	) {
         console.warn('[WebhookController] Rejected webhook due to invalid HMAC signature.');
         return res.status(401).json({ error: 'Invalid HMAC signature' });
       }
