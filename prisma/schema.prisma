@@ -1,0 +1,131 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String         @id @default(uuid())
+  phoneNumber   String         @unique // WhatsApp Phone ID e.g., "14155552671"
+  name          String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  projects      Project[]
+  sessions      AiSession[]
+  analytics     Analytics[]
+
+  @@index([phoneNumber])
+}
+
+model Project {
+  id            String         @id @default(uuid())
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  description   String?
+  isActive      Boolean        @default(true)
+  isArchived    Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  conversations Conversation[]
+  uploadedFiles UploadedFile[]
+  projectMemory ProjectMemory[]
+
+  @@index([userId, isArchived])
+}
+
+model Conversation {
+  id            String         @id @default(uuid())
+  projectId     String
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title         String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  messages      Message[]
+
+  @@index([projectId])
+}
+
+model Message {
+  id             String         @id @default(uuid())
+  conversationId String
+  conversation   Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         String         // "USER", "ASSISTANT", "SYSTEM"
+  text           String
+  mediaUrl       String?
+  mediaType      String?        // "IMAGE", "PDF", "AUDIO"
+  createdAt      DateTime       @default(now())
+  prompt         Prompt?
+
+  @@index([conversationId, createdAt])
+}
+
+model Prompt {
+  id             String         @id @default(uuid())
+  messageId      String         @unique
+  message        Message        @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  category       String         // e.g., "SOFTWARE_ENG", "MARKETING", "GENERAL"
+  rawIdea        String
+  optimizedText  String
+  targetModel    String         // e.g., "Gemini 1.5 Pro", "Claude 3.5 Sonnet", "Llama 3"
+  qualityScore   Int            // 0 - 100
+  critique       String?
+  createdAt      DateTime       @default(now())
+
+  @@index([category])
+}
+
+model ProjectMemory {
+  id             String         @id @default(uuid())
+  projectId      String
+  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  key            String         // e.g., "tech_stack", "brand_voice", "architecture_rule"
+  value          String
+  // We use Unsupported("vector(768)") to map to pgvector natively for text-embedding-004
+  embedding      Unsupported("vector(768)")?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([projectId])
+}
+
+model UploadedFile {
+  id             String         @id @default(uuid())
+  projectId      String
+  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fileName       String
+  fileUrl        String
+  fileSize       Int            @default(0)
+  mimeType       String
+  extractedText  String?
+  createdAt      DateTime       @default(now())
+
+  @@index([projectId])
+}
+
+model AiSession {
+  id             String         @id @default(uuid())
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentState   String         // e.g., "IDLE", "WAITING_FOR_PROJECT_NAME", "REFINING_PROMPT"
+  contextData    Json?          // Stores temporary variables across webhook turns
+  expiresAt      DateTime
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([userId])
+}
+
+model Analytics {
+  id             String         @id @default(uuid())
+  userId         String?
+  user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  event          String         // e.g., "PROMPT_GENERATED", "PROJECT_CREATED", "USER_ONBOARDED"
+  properties     Json?
+  timestamp      DateTime       @default(now())
+
+  @@index([event, timestamp])
+}
