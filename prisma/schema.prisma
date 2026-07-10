@@ -4,9 +4,9 @@ datasource db {
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
-
 model User {
   id            String         @id @default(uuid())
   phoneNumber   String         @unique // WhatsApp Phone ID e.g., "14155552671"
