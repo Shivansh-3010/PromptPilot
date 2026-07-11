@@ -27,10 +27,10 @@ export const config = {
     geminiApiKey: process.env.GEMINI_API_KEY || '',
     groqApiKey: process.env.GROQ_API_KEY || '',
     // Use free models
-    routingModel: 'gemini-1.5-flash',
-    generationModel: 'gemini-1.5-pro',
-    scoringModel: 'gemini-1.5-flash',
-    fallbackModel: 'llama3-8b-8192',
+    routingModel: 'gemini-2.5-flash',
+    generationModel: 'gemini-2.5-flash',
+    scoringModel: 'gemini-2.5-flash',
+    fallbackModel: 'llama-3.3-70b-versatile',
     embeddingModel: 'text-embedding-004',
   },
   security: {
