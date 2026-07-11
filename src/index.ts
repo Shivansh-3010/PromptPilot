@@ -43,12 +43,12 @@ app.get('/', (req: Request, res: Response) => {
       </head>
       <body>
         <h1>🚀 PromptPilot API Gateway</h1>
-        <p>WhatsApp-first AI Intent Translator & Universal Prompt Architect running entirely on <strong>Zero-Cost Free-Tier Cloud Infrastructure</strong>.</p>
+        <p>Telegram-first AI Intent Translator & Universal Prompt Architect running entirely on <strong>Zero-Cost Free-Tier Cloud Infrastructure</strong>.</p>
         <div class="card">
           <h3>Active Endpoints:</h3>
           <ul>
             <li><code>GET /api/v1/health</code> : Service status & uptime monitoring</li>
-            <li><code>POST /api/v1/webhooks/whatsapp</code> : Meta WhatsApp Cloud API Direct Webhook</li>
+            <li><code>POST /api/v1/webhooks/telegram</code> : Telegram Bot API Direct Webhook</li>
             <li><code>POST /api/v1/prompts/generate</code> : REST API prompt generation service</li>
           </ul>
         </div>
@@ -64,7 +64,7 @@ app.listen(PORT, () => {
   console.log(`🚀 PromptPilot Zero-Cost Server started on port ${PORT}`);
   console.log(`🌍 Environment: ${config.server.env}`);
   console.log(`💾 Vector Engine: Supabase Postgres + pgvector`);
-  console.log(`💬 WhatsApp Mode: Meta Cloud API Direct`);
+  console.log(`💬 Telegram Mode: Telegram Bot API Direct`);
   console.log(`🤖 AI Engine: Google Gemini 1.5 + Groq Llama 3`);
   console.log(`====================================================`);
 });

@@ -6,13 +6,18 @@ import { authenticateJwt } from '../middleware/auth';
 const router = Router();
 
 // ==========================================
-// 1. WhatsApp Cloud API Webhooks (Meta)
+// 1. Telegram Bot API Webhook
+// ==========================================
+router.post('/webhooks/telegram', WebhookController.handleTelegramEvents);
+
+// ==========================================
+// 2. WhatsApp Cloud API Webhooks (Optional/Legacy)
 // ==========================================
 router.get('/webhooks/whatsapp', WebhookController.verifyWebhook);
 router.post('/webhooks/whatsapp', WebhookController.handleIncomingEvents);
 
 // ==========================================
-// 2. Project Management & Prompt APIs (REST)
+// 3. Project Management & Prompt APIs (REST)
 // ==========================================
 router.get('/projects', authenticateJwt, ProjectController.listProjects);
 router.post('/projects', authenticateJwt, ProjectController.createProject);
@@ -27,7 +32,7 @@ router.get('/health', (req, res) => {
     service: 'PromptPilot Zero-Cost Backend',
     freeStack: {
       db: 'Supabase Postgres + pgvector',
-      messaging: 'WhatsApp Cloud API Direct',
+      messaging: 'Telegram Bot API Direct',
       ai: 'Google Gemini 1.5 Pro/Flash + Groq Llama 3',
     },
   });

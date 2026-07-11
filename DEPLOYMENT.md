@@ -71,28 +71,36 @@ This guide walks you through deploying the complete PromptPilot backend architec
 
 ---
 
-## Step 4: Configure Meta WhatsApp Cloud API Direct
+## Step 4: Configure Telegram Bot API Direct (100% Free, No Business Account Needed)
 
-1. Go to [https://developers.facebook.com](https://developers.facebook.com) -> **My Apps -> Create App -> Other -> Business**.
-2. Add the **WhatsApp** product to your app.
-3. In the left menu, select **WhatsApp -> API Setup**.
-   - Copy your **Phone number ID** (`WHATSAPP_PHONE_NUMBER_ID`).
-   - Copy your **WhatsApp Business Account ID** (`WHATSAPP_BUSINESS_ACCOUNT_ID`).
-   - Copy your **Temporary access token** (or generate a permanent System User token under Business Settings -> System Users -> Generate New Token with `whatsapp_business_messaging` permission).
-4. Go back to your Render dashboard and add those two ID variables plus `WHATSAPP_ACCESS_TOKEN` to your Environment Variables, then save.
+1. Open Telegram on your phone or desktop and search for **[@BotFather](https://t.me/BotFather)** (the official bot creator).
+2. Send the command `/newbot` to `@BotFather`.
+3. Choose a friendly name for your bot (e.g., `PromptPilot AI`) and a username ending in `bot` (e.g., `prompt_pilot_ai_bot`).
+4. `@BotFather` will give you an **HTTP API Token** (e.g., `1234567890:AAH...`).
+5. Go to your **Render Dashboard** -> select your `promptpilot-backend` service -> **Environment**.
+6. Add/Update the following variable and save:
+   ```text
+   TELEGRAM_BOT_TOKEN = 1234567890:AAH... (your token from BotFather)
+   ```
 
-### Connect the Webhook:
-1. In Meta App Dashboard under **WhatsApp -> Configuration**, click **Edit** next to Webhook.
-2. **Callback URL**: Enter `https://promptpilot-backend.onrender.com/api/v1/webhooks/whatsapp`
-3. **Verify Token**: Enter `promptpilot_secret_verify_token_2026`
-4. Click **Verify and Save**. You should see a green checkmark indicating successful verification!
-5. Click **Manage** next to Webhook fields and check the `messages` subscription box.
+### Connect the Webhook to Render:
+Once your Render deployment finishes rebuilding with `TELEGRAM_BOT_TOKEN`, open any web browser or terminal and visit this exact URL (replacing `<YOUR_TOKEN>` and `<YOUR_RENDER_URL>`):
+
+```bash
+https://api.telegram.org/bot<YOUR_TOKEN>/setWebhook?url=https://<YOUR_RENDER_URL>.onrender.com/api/v1/webhooks/telegram
+```
+*(Example: `https://api.telegram.org/bot1234567890:AAH.../setWebhook?url=https://promptpilot-backend.onrender.com/api/v1/webhooks/telegram`)*
+
+If successful, Telegram will respond immediately with:
+```json
+{"ok": true, "result": true, "description": "Webhook was set"}
+```
 
 ---
 
 ## Step 5: Prevent Free Container Sleep (Uptime Ping)
 
-Render free instances sleep after 15 minutes of inactivity. When a user sends a WhatsApp message while asleep, there will be a ~35-second cold start delay. To ensure **instant zero-latency replies 24/7**:
+Render free instances sleep after 15 minutes of inactivity. When a user sends a Telegram message while asleep, there will be a ~35-second cold start delay. To ensure **instant zero-latency replies 24/7**:
 
 1. Go to [https://cron-job.org](https://cron-job.org) (completely free service) and sign up.
 2. Click **Create Cronjob**.
@@ -103,9 +111,10 @@ Render free instances sleep after 15 minutes of inactivity. When a user sends a 
 
 ---
 
-## Step 6: Test End-to-End on WhatsApp
+## Step 6: Test End-to-End on Telegram
 
-1. Open WhatsApp on your phone and send `Hello` to your test/business phone number.
+1. Open your new bot inside Telegram and press **Start** or send `/start`.
 2. You will receive an instant greeting from PromptPilot!
-3. Type `/projects` to see your active workspaces.
-4. Type `Draft a clean Express & TypeScript backend structure for a fintech dashboard` to witness the **12-Point Universal Prompt Architect** construct, review, and score your prompt live!
+3. Type `/projects` or click inline buttons to see your active workspaces.
+4. Send `Draft a clean Express & TypeScript backend structure for a fintech dashboard` to witness the **12-Point Universal Prompt Architect** construct, review, and score your prompt live!
+5. Send any **Voice Note**, **Photo (screenshot)**, or **Document (PDF)** directly to the bot to automatically transcribe and embed it into your active workspace's pgvector memory!

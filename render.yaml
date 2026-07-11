@@ -15,6 +15,8 @@ services:
         sync: false
       - key: DIRECT_URL
         sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
       - key: WHATSAPP_PHONE_NUMBER_ID
         sync: false
       - key: WHATSAPP_ACCESS_TOKEN

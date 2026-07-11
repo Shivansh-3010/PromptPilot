@@ -20,6 +20,9 @@ export const config = {
     appSecret: process.env.WHATSAPP_APP_SECRET || '',
     graphApiVersion: 'v20.0',
   },
+  telegram: {
+    botToken: process.env.TELEGRAM_BOT_TOKEN || '',
+  },
   ai: {
     geminiApiKey: process.env.GEMINI_API_KEY || '',
     groqApiKey: process.env.GROQ_API_KEY || '',

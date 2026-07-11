@@ -5,6 +5,71 @@ import { AgentRouter } from '../agents/router';
 
 export class WebhookController {
   /**
+   * POST /api/v1/webhooks/telegram
+   * Receives real-time incoming updates (messages, callback_queries, voice notes, photos) from Telegram Bot API.
+   */
+  static async handleTelegramEvents(req: Request, res: Response) {
+    // Immediately respond 200 OK so Telegram doesn't retry during long AI processing
+    res.status(200).send('OK');
+
+    try {
+      const update = req.body;
+      if (!update) return;
+
+      if (update.message) {
+        const msg = update.message;
+        const chatId = msg.chat?.id?.toString();
+        const messageId = msg.message_id?.toString();
+
+        if (!chatId) return;
+
+        let content: { text?: string; buttonId?: string; listRowId?: string; mediaId?: string; mediaType?: string } = {};
+        let messageType = 'text';
+
+        if (msg.text) {
+          content.text = msg.text;
+        } else if (msg.voice || msg.audio) {
+          const audioObj = msg.voice || msg.audio;
+          content.mediaId = audioObj.file_id;
+          content.mediaType = 'AUDIO';
+          messageType = 'audio';
+        } else if (msg.document) {
+          content.mediaId = msg.document.file_id;
+          content.mediaType = 'PDF';
+          messageType = 'document';
+        } else if (msg.photo && Array.isArray(msg.photo) && msg.photo.length > 0) {
+          // Telegram sends photo sizes in an array; take the last (highest resolution)
+          const bestPhoto = msg.photo[msg.photo.length - 1];
+          content.mediaId = bestPhoto.file_id;
+          content.mediaType = 'IMAGE';
+          messageType = 'image';
+        }
+
+        // Dispatch to AgentRouter asynchronously
+        AgentRouter.handleIncomingMessage(chatId, messageId || '0', messageType, content).catch((err) => {
+          console.error(`[WebhookController] Unhandled error in AgentRouter for Telegram chat ${chatId}:`, err);
+        });
+      } else if (update.callback_query) {
+        const query = update.callback_query;
+        const chatId = query.message?.chat?.id?.toString();
+        const messageId = query.message?.message_id?.toString() || '0';
+        const buttonId = query.data;
+
+        if (!chatId || !buttonId) return;
+
+        // Dispatch callback_data as a button click to AgentRouter asynchronously
+        AgentRouter.handleIncomingMessage(chatId, messageId, 'interactive', {
+          buttonId,
+        }).catch((err) => {
+          console.error(`[WebhookController] Unhandled callback_query error for Telegram chat ${chatId}:`, err);
+        });
+      }
+    } catch (error) {
+      console.error('[WebhookController] Error parsing Telegram update payload:', error);
+    }
+  }
+
+  /**
    * GET /api/v1/webhooks/whatsapp
    * Verification handshake required when connecting Meta App Dashboard.
    */
@@ -34,12 +99,12 @@ export class WebhookController {
     if (config.whatsapp.appSecret && config.whatsapp.appSecret !== 'test_app_secret' && config.server.env === 'production') {
       const signatureHeader = req.headers['x-hub-signature-256'] as string;
       if (
-  	!signatureHeader ||
-  	!WebhookController.validateSignature(
-    	JSON.stringify(req.body),
-    	signatureHeader
-  	)
-	) {
+        !signatureHeader ||
+        !WebhookController.validateSignature(
+          JSON.stringify(req.body),
+          signatureHeader
+        )
+      ) {
         console.warn('[WebhookController] Rejected webhook due to invalid HMAC signature.');
         return res.status(401).json({ error: 'Invalid HMAC signature' });
       }
