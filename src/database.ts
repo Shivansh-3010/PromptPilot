@@ -26,11 +26,11 @@ export class DatabaseService {
       const results = await prisma.$queryRaw<MemoryMatchResult[]>`
         SELECT id, key, value, similarity
         FROM match_project_memory(
-          ${vectorString}::vector(768),
-          ${threshold},
-          ${limit},
-          ${projectId}
-        )
+  	    ${vectorString}::vector,
+            ${threshold}::double precision,
+  	    ${limit}::integer,
+  	    ${projectId}::text
+	    )
       `;
       return results;
     } catch (error) {
