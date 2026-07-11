@@ -10,7 +10,7 @@ export class GroqService {
   static async generateText(
     prompt: string,
     systemInstruction?: string,
-    modelName = 'llama3-8b-8192'
+    modelName = config.ai.fallbackModel
   ): Promise<string> {
     if (!config.ai.groqApiKey || config.ai.groqApiKey === 'test_groq_key') {
       return `[Groq Fallback Output] Processed: ${prompt.slice(0, 80)}`;
