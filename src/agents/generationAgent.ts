@@ -76,9 +76,7 @@ Please adjust the prompt above according to this feedback: "${input.refinementFe
       console.error('Gemini Pro generation failed, falling back to Groq Llama 3:', error);
       // Fast fallback using Groq Llama 3 8B
       const fallback = await GroqService.generateText(
-        `${this.getSystemInstruction(input.category, input.complexity)}\n\n${promptQuery}`,
-        undefined,
-        'llama3-8b-8192'
+        `${this.getSystemInstruction(input.category, input.complexity)}\n\n${promptQuery}`
       );
       return fallback.trim();
     }
