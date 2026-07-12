@@ -83,22 +83,37 @@ export class GeminiService {
     }
 
     try {
+      const normalizedMimeType =
+        mimeType === 'image/jpg'
+          ? 'image/jpeg'
+          : mimeType === 'audio/oga'
+            ? 'audio/ogg'
+            : mimeType || 'application/octet-stream';
+
+      console.log(`[GeminiService] Processing media with model ${config.ai.routingModel}, MIME: ${normalizedMimeType}, buffer size: ${buffer.length} bytes`);
+
       const model = genAI.getGenerativeModel({ model: config.ai.routingModel });
       const base64Data = buffer.toString('base64');
 
       const result = await model.generateContent([
+        promptInstruction,
         {
           inlineData: {
             data: base64Data,
-            mimeType,
+            mimeType: normalizedMimeType,
           },
         },
-        promptInstruction,
       ]);
 
-      return result.response.text();
+      const responseText = result.response.text();
+      return responseText || '';
     } catch (error: any) {
-      console.error('Error processing media with Gemini:', error.message);
+      console.error('[GeminiService] Error processing media with Gemini:', {
+        mimeType,
+        bufferSize: buffer?.length,
+        errorMessage: error.message,
+        stack: error.stack,
+      });
       throw new Error(`Failed to extract text from media: ${error.message}`);
     }
   }

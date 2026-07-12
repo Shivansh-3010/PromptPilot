@@ -109,7 +109,7 @@ export class ProjectController {
 
       res.json({
         category,
-        targetModel: 'Gemini 1.5 Pro (Zero-Cost)',
+        targetModel: 'Gemini 2.5 Flash (Zero-Cost)',
         qualityScore: evaluation.overallScore,
         optimizedText: evaluation.improvedDraft || draft,
         critique: evaluation.critique,

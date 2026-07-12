@@ -23,7 +23,15 @@ export class WebhookController {
 
         if (!chatId) return;
 
-        let content: { text?: string; buttonId?: string; listRowId?: string; mediaId?: string; mediaType?: string } = {};
+        let content: {
+          text?: string;
+          buttonId?: string;
+          listRowId?: string;
+          mediaId?: string;
+          mediaType?: string;
+          fileName?: string;
+          telegramMimeType?: string;
+        } = {};
         let messageType = 'text';
 
         if (msg.text) {
@@ -32,16 +40,22 @@ export class WebhookController {
           const audioObj = msg.voice || msg.audio;
           content.mediaId = audioObj.file_id;
           content.mediaType = 'AUDIO';
+          content.fileName = audioObj.file_name || `voice_${Date.now()}.ogg`;
+          content.telegramMimeType = audioObj.mime_type || 'audio/ogg';
           messageType = 'audio';
         } else if (msg.document) {
           content.mediaId = msg.document.file_id;
-          content.mediaType = 'PDF';
+          content.mediaType = 'DOCUMENT';
+          content.fileName = msg.document.file_name || `doc_${Date.now()}`;
+          content.telegramMimeType = msg.document.mime_type || 'application/octet-stream';
           messageType = 'document';
         } else if (msg.photo && Array.isArray(msg.photo) && msg.photo.length > 0) {
           // Telegram sends photo sizes in an array; take the last (highest resolution)
           const bestPhoto = msg.photo[msg.photo.length - 1];
           content.mediaId = bestPhoto.file_id;
           content.mediaType = 'IMAGE';
+          content.fileName = `photo_${Date.now()}.jpg`;
+          content.telegramMimeType = 'image/jpeg';
           messageType = 'image';
         }
 

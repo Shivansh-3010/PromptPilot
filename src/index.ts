@@ -67,7 +67,7 @@ app.listen(PORT, () => {
   console.log(`🌍 Environment: ${config.server.env}`);
   console.log(`💾 Vector Engine: Supabase Postgres + pgvector`);
   console.log(`💬 Telegram Mode: Telegram Bot API Direct`);
-  console.log(`🤖 AI Engine: Google Gemini 1.5 + Groq Llama 3`);
+  console.log(`🤖 AI Engine: Google Gemini 2.5 Flash + Groq Llama 3.3`);
   console.log(`====================================================`);
 });
 

@@ -1,4 +1,7 @@
 import axios from 'axios';
+import path from 'path';
+import mime from 'mime-types';
+import fileType from 'file-type';
 import { config } from '../config';
 
 export interface TelegramInteractiveRow {
@@ -90,12 +93,12 @@ export class TelegramService {
   static async sendButtonsMessage(
     chatId: string,
     bodyText: string,
-    buttons: { id: string; title: string }[],
+    buttons: TelegramInteractiveRow[],
     headerText?: string,
     footerText?: string
   ): Promise<any> {
     if (!config.telegram.botToken || config.telegram.botToken === 'test_telegram_token') {
-      console.log(`[Dev Telegram Mock] Sending Buttons to ${chatId}:\nBody: ${bodyText}\nButtons:`, buttons);
+      console.log(`[Dev Telegram Mock] Sending Buttons to ${chatId}:\nBody: ${bodyText}\nButtons:`, JSON.stringify(buttons, null, 2));
       return { ok: true, result: { message_id: `mock_${Date.now()}` } };
     }
 
@@ -103,15 +106,12 @@ export class TelegramService {
       .filter(Boolean)
       .join('\n\n');
 
-    // Group buttons into rows (e.g. up to 2 per row)
-    const inlineKeyboard: { text: string; callback_data: string }[][] = [];
-    for (let i = 0; i < buttons.length; i += 2) {
-      const row = buttons.slice(i, i + 2).map((btn) => ({
+    const inlineKeyboard = buttons.map((btn) => [
+      {
         text: btn.title,
-        callback_data: btn.id.slice(0, 64), // Telegram max callback_data is 64 bytes
-      }));
-      inlineKeyboard.push(row);
-    }
+        callback_data: btn.id.slice(0, 64), // Telegram max callback_data length is 64 bytes
+      },
+    ]);
 
     try {
       const response = await axios.post(`${this.baseUrl}/sendMessage`, {
@@ -124,7 +124,6 @@ export class TelegramService {
       });
       return response.data;
     } catch (error: any) {
-      // Fallback without parse_mode if needed
       const fallbackResponse = await axios.post(`${this.baseUrl}/sendMessage`, {
         chat_id: chatId,
         text: fullText,
@@ -192,10 +191,13 @@ export class TelegramService {
   }
 
   /**
-   * Fetches raw media bytes from Telegram Bot API using a file_id.
-   * Used for processing audio notes, voice messages, PDFs, and photos sent via Telegram.
+   * Fetches raw media bytes from Telegram Bot API using a file_id and performs robust multi-layer MIME detection.
    */
-  static async downloadMediaBytes(fileId: string): Promise<{ buffer: Buffer; mimeType: string }> {
+  static async downloadMediaBytes(
+    fileId: string,
+    telegramFileName?: string,
+    telegramMimeType?: string
+  ): Promise<{ buffer: Buffer; mimeType: string; fileName: string }> {
     try {
       // Step 1: Get file path from Telegram
       const getFileResp = await axios.get(`${this.baseUrl}/getFile`, {
@@ -206,25 +208,78 @@ export class TelegramService {
         throw new Error('Telegram getFile API did not return a valid file_path.');
       }
 
-      const filePath = getFileResp.data.result.file_path;
-
-      // Infer mimeType from extension if needed
-      let mimeType = 'application/octet-stream';
-      if (filePath.endsWith('.oga') || filePath.endsWith('.ogg')) mimeType = 'audio/ogg';
-      else if (filePath.endsWith('.mp3')) mimeType = 'audio/mpeg';
-      else if (filePath.endsWith('.pdf')) mimeType = 'application/pdf';
-      else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) mimeType = 'image/jpeg';
-      else if (filePath.endsWith('.png')) mimeType = 'image/png';
-
-      // Step 2: Download raw binary bytes
+      const filePath: string = getFileResp.data.result.file_path;
       const fileUrl = `${this.fileBaseUrl}/${filePath}`;
       const fileResponse = await axios.get(fileUrl, {
         responseType: 'arraybuffer',
       });
+      const buffer = Buffer.from(fileResponse.data);
+
+      const finalFileName = telegramFileName || filePath.split('/').pop() || `file_${Date.now()}`;
+      const extFromFileName = path.extname(finalFileName).toLowerCase().replace('.', '');
+      const extFromPath = path.extname(filePath).toLowerCase().replace('.', '');
+      const ext = extFromFileName || extFromPath;
+
+      // Layer 1: Magic byte detection via file-type package
+      const magicResult = await fileType.fromBuffer(buffer);
+      const magicMime = (magicResult?.mime as string) || null;
+
+      // Layer 2: Extension lookup via mime-types package
+      const extMime = (ext && (mime.lookup(ext) as string)) || null;
+
+      // Layer 3: Explicit extension priority mapping (to resolve generic or ambiguous signatures like zip vs docx/xlsx/pptx)
+      const extToMimeMap: Record<string, string> = {
+        pdf: 'application/pdf',
+        txt: 'text/plain',
+        md: 'text/markdown',
+        doc: 'application/msword',
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        csv: 'text/csv',
+        xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        png: 'image/png',
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        webp: 'image/webp',
+        mp3: 'audio/mpeg',
+        ogg: 'audio/ogg',
+        oga: 'audio/ogg',
+        wav: 'audio/wav',
+      };
+
+      const mappedExtMime = ext ? extToMimeMap[ext] : null;
+
+      let finalMimeType = 'application/octet-stream';
+
+      if (magicMime && magicMime !== 'application/octet-stream') {
+        // If magic detected application/zip but extension specifically points to an Office OpenXML docx/xlsx/pptx, prefer specific MIME
+        if (magicMime === 'application/zip' && (ext === 'docx' || ext === 'xlsx' || ext === 'pptx')) {
+          finalMimeType = mappedExtMime || extMime || magicMime;
+        } else {
+          finalMimeType = magicMime;
+        }
+      } else if (mappedExtMime) {
+        finalMimeType = mappedExtMime;
+      } else if (extMime && extMime !== 'application/octet-stream') {
+        finalMimeType = extMime;
+      } else if (telegramMimeType && telegramMimeType !== 'application/octet-stream') {
+        finalMimeType = telegramMimeType;
+      }
+
+      console.log(`[MediaIngestion] Downloaded & analyzed file:`, {
+        originalFilename: finalFileName,
+        fileExtension: ext || 'unknown',
+        telegramMimeType: telegramMimeType || 'none',
+        magicByteMime: magicMime || 'none',
+        extensionLookupMime: mappedExtMime || extMime || 'none',
+        detectedMimeType: finalMimeType,
+        bufferSize: buffer.length,
+      });
 
       return {
-        buffer: Buffer.from(fileResponse.data),
-        mimeType,
+        buffer,
+        mimeType: finalMimeType,
+        fileName: finalFileName,
       };
     } catch (error: any) {
       console.error('Error downloading media from Telegram:', error.response?.data || error.message);

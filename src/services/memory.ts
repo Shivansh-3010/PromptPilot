@@ -3,14 +3,29 @@ import { GeminiService } from './gemini';
 
 export class MemoryService {
   /**
-   * Chunks text into smaller paragraphs/blocks (~400 characters) and upserts embeddings into Supabase pgvector.
+   * Cleans raw extracted document text before chunking and embedding.
+   */
+  private static cleanText(text: string): string {
+    return text
+      .replace(/\r\n/g, '\n')
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // strip control chars except \t and \n
+      .replace(/\n{3,}/g, '\n\n') // collapse excessive blank lines
+      .replace(/[ \t]{2,}/g, ' ') // collapse excessive spacing
+      .trim();
+  }
+
+  /**
+   * Chunks text into blocks (~500-1000 tokens, approx 2800 chars with 420 chars overlap) and upserts embeddings into Supabase pgvector.
    */
   static async ingestDocumentText(
     projectId: string,
     fileName: string,
     rawText: string
   ): Promise<number> {
-    const chunks = this.splitIntoChunks(rawText, 450, 50);
+    const cleanedText = this.cleanText(rawText);
+    if (!cleanedText) return 0;
+
+    const chunks = this.splitIntoChunks(cleanedText, 2800, 420);
     let count = 0;
 
     for (let i = 0; i < chunks.length; i++) {
@@ -45,10 +60,10 @@ export class MemoryService {
   }
 
   /**
-   * Simple paragraph/word sliding window chunker.
+   * Sliding window chunker with natural sentence/paragraph boundaries (~500-1000 tokens).
    */
-  private static splitIntoChunks(text: string, chunkSize = 450, overlap = 50): string[] {
-    const cleaned = text.replace(/\r\n/g, '\n').trim();
+  private static splitIntoChunks(text: string, chunkSize = 2800, overlap = 420): string[] {
+    const cleaned = text.trim();
     if (cleaned.length <= chunkSize) return [cleaned];
 
     const chunks: string[] = [];
@@ -61,10 +76,11 @@ export class MemoryService {
         break;
       }
 
-      // Try to break at a newline or period near the end
-      const lastPeriod = cleaned.lastIndexOf('.', end);
+      // Try to break at a double newline, newline, or period near the end
+      const lastDoubleNewline = cleaned.lastIndexOf('\n\n', end);
       const lastNewline = cleaned.lastIndexOf('\n', end);
-      const breakPoint = Math.max(lastPeriod, lastNewline);
+      const lastPeriod = cleaned.lastIndexOf('.', end);
+      const breakPoint = Math.max(lastDoubleNewline, lastNewline, lastPeriod);
 
       if (breakPoint > start + chunkSize * 0.5) {
         end = breakPoint + 1;

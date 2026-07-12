@@ -5,6 +5,8 @@ import { GeminiService } from '../services/gemini';
 import { IntentAgent } from './intentAgent';
 import { GenerationAgent } from './generationAgent';
 import { ScoringAgent } from './scoringAgent';
+const pdfParse = require('pdf-parse');
+const mammoth = require('mammoth');
 
 export class AgentRouter {
   /**
@@ -14,7 +16,15 @@ export class AgentRouter {
     chatId: string,
     messageId: string,
     messageType: string,
-    content: { text?: string; buttonId?: string; listRowId?: string; mediaId?: string; mediaType?: string }
+    content: {
+      text?: string;
+      buttonId?: string;
+      listRowId?: string;
+      mediaId?: string;
+      mediaType?: string;
+      fileName?: string;
+      telegramMimeType?: string;
+    }
   ): Promise<void> {
     console.log(`[AgentRouter] Processing turn from Telegram chat ${chatId}: Type=${messageType}`);
 
@@ -51,9 +61,17 @@ export class AgentRouter {
       return;
     }
 
-    // Handle Media (Voice notes / PDFs / Images)
+    // Handle Media (Voice notes / PDFs / Images / Documents)
     if (content.mediaId && content.mediaType) {
-      await this.handleMediaIngestion(chatId, activeProject.id, activeProject.name, content.mediaId, content.mediaType);
+      await this.handleMediaIngestion(
+        chatId,
+        activeProject.id,
+        activeProject.name,
+        content.mediaId,
+        content.mediaType,
+        content.fileName,
+        content.telegramMimeType
+      );
       return;
     }
 
@@ -187,7 +205,7 @@ export class AgentRouter {
         category,
         rawIdea,
         optimizedText: finalPromptText,
-        targetModel: 'Gemini 1.5 Pro (Zero-Cost)',
+        targetModel: 'Gemini 2.5 Flash (Zero-Cost)',
         qualityScore: evaluation.overallScore,
         critique: evaluation.critique,
       },
@@ -374,27 +392,121 @@ export class AgentRouter {
   }
 
   /**
-   * Downloads and embeds media from Telegram.
+   * Downloads and embeds media from Telegram with multi-format document extraction and detailed logging.
    */
-  private static async handleMediaIngestion(chatId: string, projectId: string, projectName: string, mediaId: string, mediaType: string): Promise<void> {
-    await TelegramService.sendTextMessage(chatId, `📥 Downloading & processing ${mediaType.toLowerCase()} to vector memory for *${projectName}*...`);
+  private static async handleMediaIngestion(
+    chatId: string,
+    projectId: string,
+    projectName: string,
+    mediaId: string,
+    mediaType: string,
+    fileName?: string,
+    telegramMimeType?: string
+  ): Promise<void> {
+    const displayType = fileName ? fileName : mediaType.toLowerCase();
+    await TelegramService.sendTextMessage(chatId, `📥 Downloading & processing ${displayType} to vector memory for *${projectName}*...`);
 
     try {
-      const { buffer, mimeType } = await TelegramService.downloadMediaBytes(mediaId);
+      const { buffer, mimeType, fileName: detectedFileName } = await TelegramService.downloadMediaBytes(
+        mediaId,
+        fileName,
+        telegramMimeType
+      );
+      const ext = (detectedFileName.split('.').pop() || '').toLowerCase();
       let extractedText = '';
+      let extractionMethod = 'unknown';
 
-      if (mimeType.includes('audio')) {
-        extractedText = await GeminiService.processMediaInput(mimeType, buffer, 'Transcribe this voice note exactly word for word. If it contains project ideas or instructions, summarize key requirements concisely.');
-      } else if (mimeType.includes('image') || mimeType.includes('pdf')) {
-        extractedText = await GeminiService.processMediaInput(mimeType, buffer, 'Extract all text and summarize the core technical specifications, diagrams, or business requirements contained in this file.');
+      if (mimeType === 'application/pdf' || ext === 'pdf') {
+        extractionMethod = 'pdf-parse';
+        try {
+          const pdfData = await pdfParse(buffer);
+          extractedText = pdfData.text || '';
+        } catch (err: any) {
+          console.error(`[MediaIngestion] Error during pdf-parse extraction for ${detectedFileName}:`, err.stack || err);
+          throw new Error(`Failed to parse PDF document: ${err.message}`);
+        }
+      } else if (
+        mimeType.includes('wordprocessingml') ||
+        mimeType.includes('msword') ||
+        ext === 'docx' ||
+        ext === 'doc'
+      ) {
+        if (ext === 'docx' || mimeType.includes('wordprocessingml')) {
+          extractionMethod = 'mammoth';
+          try {
+            const result = await mammoth.extractRawText({ buffer });
+            extractedText = result.value || '';
+          } catch (err: any) {
+            console.error(`[MediaIngestion] Error during mammoth extraction for ${detectedFileName}:`, err.stack || err);
+            throw new Error(`Failed to parse DOCX document: ${err.message}`);
+          }
+        } else {
+          extractionMethod = 'metadata-summary';
+          extractedText = `Document Summary:\nFilename: ${detectedFileName}\nFile Extension: ${ext}\nMIME Type: ${mimeType}\nFile Size: ${buffer.length} bytes\nNote: Legacy binary .doc format not supported for direct extraction. Stored file classification.`;
+        }
+      } else if (
+        mimeType === 'text/plain' ||
+        mimeType === 'text/markdown' ||
+        mimeType === 'text/csv' ||
+        ext === 'txt' ||
+        ext === 'md' ||
+        ext === 'csv'
+      ) {
+        extractionMethod = `raw-${ext || 'text'}`;
+        extractedText = buffer.toString('utf-8');
+      } else if (mimeType.startsWith('image/') || ['png', 'jpg', 'jpeg', 'webp'].includes(ext)) {
+        extractionMethod = 'gemini-image';
+        try {
+          extractedText = await GeminiService.processMediaInput(
+            mimeType.startsWith('image/') ? mimeType : `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+            buffer,
+            'Extract all text and summarize the core technical specifications, diagrams, and business requirements contained in this image.'
+          );
+        } catch (err: any) {
+          console.error(`[MediaIngestion] Gemini image processing failed for ${detectedFileName}:`, err.stack || err);
+          throw new Error(`Failed to analyze image: ${err.message}`);
+        }
+      } else if (mimeType.startsWith('audio/') || ['mp3', 'ogg', 'oga', 'wav'].includes(ext)) {
+        extractionMethod = 'gemini-audio';
+        try {
+          extractedText = await GeminiService.processMediaInput(
+            mimeType.startsWith('audio/') ? mimeType : `audio/${ext === 'oga' ? 'ogg' : ext}`,
+            buffer,
+            'Transcribe this voice note exactly word for word. If it contains project ideas or instructions, summarize key requirements concisely.'
+          );
+        } catch (err: any) {
+          console.error(`[MediaIngestion] Gemini audio processing failed for ${detectedFileName}:`, err.stack || err);
+          throw new Error(`Failed to transcribe audio: ${err.message}`);
+        }
       } else {
-        extractedText = `Uploaded media: ${mimeType}`;
+        extractionMethod = 'metadata-summary';
+        extractedText = `Document Summary:\nFilename: ${detectedFileName}\nFile Extension: ${ext || 'unknown'}\nMIME Type: ${mimeType}\nFile Size: ${buffer.length} bytes\nNote: Unsupported format for direct text extraction. Stored file classification and metadata.`;
       }
 
-      await MemoryService.ingestDocumentText(projectId, `${mediaType}_${Date.now()}`, extractedText);
-      await TelegramService.sendTextMessage(chatId, `✅ Media processed successfully!\n*Extracted Context Snapshot:*\n"${extractedText.slice(0, 180)}..."\n\nVector embeddings generated and stored in *${projectName}* workspace.`);
+      console.log(`[MediaIngestion] Extraction Report:`, {
+        originalFilename: detectedFileName,
+        fileExtension: ext || 'unknown',
+        detectedMimeType: mimeType,
+        mediaType,
+        bufferSize: buffer.length,
+        extractionMethod,
+        extractedChars: extractedText.length,
+      });
+
+      const chunkCount = await MemoryService.ingestDocumentText(projectId, detectedFileName || `${mediaType}_${Date.now()}`, extractedText);
+      await TelegramService.sendTextMessage(
+        chatId,
+        `✅ Media processed successfully!\n*Extraction Method:* \`${extractionMethod}\` | *Chunks Stored:* ${chunkCount}\n*Extracted Context Snapshot:*\n"${extractedText.slice(0, 180)}..."\n\nVector embeddings generated and stored in *${projectName}* workspace.`
+      );
     } catch (error: any) {
-      console.error('Failed to ingest media from Telegram:', error);
+      console.error('Failed to ingest media from Telegram:', {
+        mediaId,
+        mediaType,
+        fileName,
+        telegramMimeType,
+        error: error.message,
+        stack: error.stack,
+      });
       await TelegramService.sendTextMessage(chatId, '❌ Failed to process media file. Please ensure the file format is supported and try again.');
     }
   }
