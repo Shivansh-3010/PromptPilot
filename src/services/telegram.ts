@@ -35,8 +35,29 @@ export class TelegramService {
 
     const chunks: string[] = [];
 
-    for (let i = 0; i < text.length; i += MAX_LENGTH) {
-      chunks.push(text.slice(i, i + MAX_LENGTH));
+    let remaining = text;
+
+    while (remaining.length > MAX_LENGTH) {
+      let splitAt = remaining.lastIndexOf('\n\n', MAX_LENGTH);
+
+      if (splitAt === -1) {
+        splitAt = remaining.lastIndexOf('\n', MAX_LENGTH);
+      }
+
+      if (splitAt === -1) {
+        splitAt = remaining.lastIndexOf(' ', MAX_LENGTH);
+      }
+
+      if (splitAt === -1) {
+        splitAt = MAX_LENGTH;
+      }
+
+      chunks.push(remaining.slice(0, splitAt));
+      remaining = remaining.slice(splitAt).trimStart();
+    }
+
+    if (remaining.length > 0) {
+      chunks.push(remaining);
     }
 
     let lastResponse: any;

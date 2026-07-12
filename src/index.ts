@@ -6,6 +6,8 @@ import apiRoutes from './routes/api';
 
 const app = express();
 
+app.set('trust proxy', 1);
+
 // Capture raw body for exact HMAC-SHA256 Meta webhook validation
 app.use(
   express.json({
