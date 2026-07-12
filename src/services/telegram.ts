@@ -28,30 +28,39 @@ export class TelegramService {
   static async sendTextMessage(chatId: string, text: string): Promise<any> {
     if (!config.telegram.botToken || config.telegram.botToken === 'test_telegram_token') {
       console.log(`[Dev Telegram Mock] Sending Text to ${chatId}:\n${text}\n---`);
-      return { ok: true, result: { message_id: `mock_${Date.now()}` } };
+      return { ok: true };
     }
 
-    try {
-      // First attempt sending with Markdown formatting
-      const response = await axios.post(`${this.baseUrl}/sendMessage`, {
-        chat_id: chatId,
-        text,
-        parse_mode: 'Markdown',
-      });
-      return response.data;
-    } catch (error: any) {
-      console.warn('[TelegramService] Markdown formatting error, retrying as plain text:', error.response?.data?.description || error.message);
+    const MAX_LENGTH = 4000;
+
+    const chunks: string[] = [];
+
+    for (let i = 0; i < text.length; i += MAX_LENGTH) {
+      chunks.push(text.slice(i, i + MAX_LENGTH));
+    }
+
+    let lastResponse: any;
+
+    for (const chunk of chunks) {
       try {
+        const response = await axios.post(`${this.baseUrl}/sendMessage`, {
+          chat_id: chatId,
+          text: chunk,
+          parse_mode: 'Markdown',
+        });
+
+        lastResponse = response.data;
+      } catch (error: any) {
         const fallbackResponse = await axios.post(`${this.baseUrl}/sendMessage`, {
           chat_id: chatId,
-          text,
+          text: chunk,
         });
-        return fallbackResponse.data;
-      } catch (fatalError: any) {
-        console.error('Error sending Telegram text message:', fatalError.response?.data || fatalError.message);
-        throw fatalError;
+
+        lastResponse = fallbackResponse.data;
       }
     }
+
+    return lastResponse;
   }
 
   /**
