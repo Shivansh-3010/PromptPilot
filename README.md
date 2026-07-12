@@ -1,14 +1,14 @@
-# PromptPilot: Zero-Cost WhatsApp AI Prompt Architect & Intent Translator
+# PromptPilot: Telegram AI Prompt Architect & Intent Translator
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Stack](https://img.shields.io/badge/stack-Node.js%20%7C%20TypeScript%20%7C%20Prisma%20%7C%20pgvector-blue.svg)]()
 [![Zero Cost](https://img.shields.io/badge/operational_cost-%240%20%2F%20mo-success.svg)]()
 
-PromptPilot is a production-ready, multi-agent **AI Intent Translator and Prompt Architect** centered around WhatsApp. It transforms rough, unstructured human ideas into high-density, professional prompts using a 12-point framework, pgvector semantic memory, and multi-modal file ingestion.
+PromptPilot is a production-ready, multi-agent **AI Intent Translator and Prompt Architect** centered around Telegram. It transforms rough, unstructured human ideas into high-density, professional prompts using a 12-point framework, pgvector semantic memory, and multi-modal file ingestion.
 
 Crucially, this architecture is specifically engineered to run **100% Free of Cost** using enterprise-grade free developer tiers:
-- **WhatsApp Direct**: Official Meta WhatsApp Cloud API (`v20.0`) with 1,000 free monthly conversations.
-- **AI Inference Engine**: Google Gemini API Free Tier (`gemini-1.5-pro` & `gemini-1.5-flash`) + Groq Cloud (`llama3-8b-8192`).
+- **Telegram API**: Official Telegram Bot API.
+- **AI Inference Engine**: Google Gemini API Free Tier (`gemini-2.5-flash` for reasoning & multimodal extraction) + Groq Cloud (`llama-3.3-70b-versatile` fallback).
 - **Vector Database**: Supabase Managed PostgreSQL + `pgvector` (`text-embedding-004`).
 - **Cloud Hosting**: Render Free Web Services / Fly.io with multi-stage Docker containerization.
 
@@ -18,7 +18,7 @@ Crucially, this architecture is specifically engineered to run **100% Free of Co
 
 1. **Project-Based Workspaces**:
    - Maintain isolated context between projects (e.g., *Startup Pitch Deck*, *SaaS Architecture*, *Content Marketing*).
-   - Switch or create workspaces right inside WhatsApp chat using `/projects` and `/new`.
+   - Switch or create workspaces right inside Telegram chat using `/projects` and `/new`.
 2. **Universal Category Autodetection**:
    - Automatically detects whether the task is *Software Engineering, AI Systems, Business, Writing, or Automation* without requiring manual tags.
 3. **12-Point Universal Prompt Framework**:
@@ -35,14 +35,14 @@ Crucially, this architecture is specifically engineered to run **100% Free of Co
 
 ```mermaid
 graph TD
-    User([User on WhatsApp]) -->|Free Message / Audio / PDF| WA_API[Meta WhatsApp Cloud API Direct]
+    User([User on Telegram]) -->|Free Message / Audio / PDF| WA_API[Telegram Bot API Direct]
     WA_API -->|Webhook POST| Render[Render Free Server: Express + TS]
     
     subgraph Multi-Agent Orchestrator
-        Render --> IntentAgent[Intent & Category Agent: Gemini 1.5 Flash]
+        Render --> IntentAgent[Intent & Category Agent: Gemini 2.5 Flash]
         IntentAgent --> MemoryService[Memory Retrieval: pgvector HNSW]
-        MemoryService --> GenAgent[Prompt Architect: Gemini 1.5 Pro]
-        GenAgent --> ScoreAgent[QA Scoring Agent: Gemini 1.5 Flash]
+        MemoryService --> GenAgent[Prompt Architect: Gemini 2.5 Flash]
+        GenAgent --> ScoreAgent[QA Scoring Agent: Gemini 2.5 Flash]
     end
     
     MemoryService <-->|SQL match_project_memory| Supabase[(Supabase Postgres + pgvector)]
@@ -68,7 +68,7 @@ cp .env.example .env
 
 ### 2. Configure Credentials (`.env`)
 1. **Supabase Database**: Create a free project at [supabase.com](https://supabase.com). Go to Project Settings -> Database -> Connection string and paste `DATABASE_URL`.
-2. **Meta WhatsApp Cloud API**: Create a free business app at [developers.facebook.com](https://developers.facebook.com). Copy `WHATSAPP_PHONE_NUMBER_ID` and generate a system user token.
+2. **Telegram Bot API**: Create a free bot using BotFather on Telegram. Copy the token into `TELEGRAM_BOT_TOKEN`.
 3. **Google AI Studio**: Get your free Gemini API key from [aistudio.google.com](https://aistudio.google.com).
 4. **Groq Cloud**: Get your free Groq fallback key from [console.groq.com](https://console.groq.com).
 
@@ -105,12 +105,12 @@ npm run dev
 │   ├── middleware/
 │   │   └── auth.ts                         # JWT authentication guard for REST endpoints
 │   ├── routes/
-│   │   └── api.ts                          # WhatsApp webhooks, Project REST endpoints, Health check
+│   │   └── api.ts                          # Telegram webhooks, Project REST endpoints, Health check
 │   ├── controllers/
-│   │   ├── webhookController.ts            # Meta handshake verification & HMAC signature validation
+│   │   ├── webhookController.ts            # Telegram webhook payload processing & normalisation
 │   │   └── projectController.ts            # REST APIs for frontend or dashboard integration
 │   ├── services/
-│   │   ├── whatsapp.ts                     # Meta Graph API wrapper: text, lists, quick buttons, media
+│   │   ├── telegram.ts                     # Telegram Bot API wrapper: text, lists, quick buttons, media
 │   │   ├── gemini.ts                       # Google GenAI wrapper: Flash, Pro, Embeddings, Multi-modal
 │   │   ├── groq.ts                         # Groq Llama 3 high-speed fallback inference wrapper
 │   │   └── memory.ts                       # Text chunker & pgvector embedding storage/retrieval
@@ -118,7 +118,7 @@ npm run dev
 │       ├── intentAgent.ts                  # Classifies intent & complexity (GENERATE, REFINE, SWITCH)
 │       ├── generationAgent.ts              # Synthesizes 12-point system prompt architecture
 │       ├── scoringAgent.ts                 # Evaluates 1-100 QA score and runs self-correction loop
-│       └── router.ts                       # Multi-agent orchestrator managing WhatsApp session turns
+│       └── router.ts                       # Multi-agent orchestrator managing Telegram session turns
 ├── Dockerfile                              # Multi-stage lightweight Alpine build
 ├── render.yaml                             # One-click Render zero-cost infrastructure deployment
 └── package.json
@@ -126,7 +126,7 @@ npm run dev
 
 ---
 
-## 💬 WhatsApp Commands & Interaction
+## 💬 Telegram Commands & Interaction
 
 | Command / Action | Description |
 | :--- | :--- |
@@ -143,4 +143,4 @@ npm run dev
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed step-by-step instructions on deploying to **Render Free Tier** and setting up a free keep-alive cron job.
 
 ## 📄 License
-MIT License - PromptPilot Engineering Team
+MIT License - Produced by Shivansh Deshwal
