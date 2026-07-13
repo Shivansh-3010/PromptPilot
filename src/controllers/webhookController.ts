@@ -31,7 +31,12 @@ export class WebhookController {
           mediaType?: string;
           fileName?: string;
           telegramMimeType?: string;
-        } = {};
+          username?: string;
+          firstName?: string;
+        } = {
+          username: msg.from?.username,
+          firstName: msg.from?.first_name,
+        };
         let messageType = 'text';
 
         if (msg.text) {
@@ -74,6 +79,8 @@ export class WebhookController {
         // Dispatch callback_data as a button click to AgentRouter asynchronously
         AgentRouter.handleIncomingMessage(chatId, messageId, 'interactive', {
           buttonId,
+          username: query.from?.username,
+          firstName: query.from?.first_name,
         }).catch((err) => {
           console.error(`[WebhookController] Unhandled callback_query error for Telegram chat ${chatId}:`, err);
         });

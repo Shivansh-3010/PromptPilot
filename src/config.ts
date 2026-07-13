@@ -37,4 +37,11 @@ export const config = {
     jwtSecret: process.env.JWT_SECRET || 'default_jwt_secret',
     rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '15', 10),
   },
+  admin: {
+    telegramIds: (process.env.ADMIN_TELEGRAM_IDS || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean),
+  },
 };
+

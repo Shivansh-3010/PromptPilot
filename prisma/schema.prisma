@@ -130,3 +130,30 @@ model Analytics {
 
   @@index([event, timestamp])
 }
+
+model ApprovedUser {
+  id          String    @id @default(uuid())
+  telegramId  String    @unique
+  username    String?
+  firstName   String?
+  status      String    @default("PENDING") // PENDING, APPROVED, REJECTED, BLOCKED
+  createdAt   DateTime  @default(now())
+  approvedAt  DateTime?
+
+  @@index([status, createdAt])
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+  telegramId  String
+  action      String   // e.g., ACCESS_REQUESTED, USER_APPROVED, PROMPT_GENERATED, FILE_UPLOADED
+  details     String?
+  createdAt   DateTime @default(now())
+
+  @@index([telegramId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([telegramId, createdAt])
+  @@index([action, createdAt])
+}
+

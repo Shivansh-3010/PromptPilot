@@ -4,6 +4,7 @@ import { AuthenticatedRequest } from '../middleware/auth';
 import { MemoryService } from '../services/memory';
 import { GenerationAgent } from '../agents/generationAgent';
 import { ScoringAgent } from '../agents/scoringAgent';
+import { AuthorizationService } from '../services/authorizationService';
 
 export class ProjectController {
   /**
@@ -57,10 +58,19 @@ export class ProjectController {
    */
   static async searchMemory(req: AuthenticatedRequest, res: Response) {
     try {
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
       const { id } = req.params;
       const { query, limit = 5 } = req.body;
 
       if (!query) return res.status(400).json({ error: 'Search query is required' });
+
+      // Enforce centralized ownership verification before vector retrieval
+      const project = await AuthorizationService.verifyProjectAccess(userId, id, req.user?.phoneNumber);
+      if (!project) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to access this workspace memory' });
+      }
 
       const results = await MemoryService.retrieveRelevantContext(id, query, limit);
       res.json({ results });
@@ -81,7 +91,7 @@ export class ProjectController {
       if (!rawInput) return res.status(400).json({ error: 'rawInput is required' });
 
       let targetProject = projectId
-        ? await prisma.project.findFirst({ where: { id: projectId, userId } })
+        ? await AuthorizationService.verifyProjectAccess(userId, projectId, req.user?.phoneNumber)
         : await DatabaseService.getActiveProject(userId);
 
       if (!targetProject) {

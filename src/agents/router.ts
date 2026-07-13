@@ -5,6 +5,10 @@ import { GeminiService } from '../services/gemini';
 import { IntentAgent } from './intentAgent';
 import { GenerationAgent } from './generationAgent';
 import { ScoringAgent } from './scoringAgent';
+import { AccessControlService } from '../services/accessControl';
+import { AuthorizationService } from '../services/authorizationService';
+import { AdminService } from '../services/adminService';
+import { ActivityLogger } from '../services/activityLogger';
 const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
 
@@ -24,12 +28,34 @@ export class AgentRouter {
       mediaType?: string;
       fileName?: string;
       telegramMimeType?: string;
+      username?: string;
+      firstName?: string;
     }
   ): Promise<void> {
     console.log(`[AgentRouter] Processing turn from Telegram chat ${chatId}: Type=${messageType}`);
 
+    // Early Interception 1: Check if admin turn (`/admin...` or `admin_...` action)
+    const actionId = content.buttonId || content.listRowId;
+    const rawInputText = content.text || '';
+    if (
+      (rawInputText && rawInputText.trim().toLowerCase().startsWith('/admin')) ||
+      (actionId && actionId.startsWith('admin_'))
+    ) {
+      const handled = await AdminService.handleAdminTurn(chatId, rawInputText, actionId);
+      if (handled) return;
+    }
+
+    // Early Interception 2: Strict Access Control check before any user onboarding / AI processing
+    const access = await AccessControlService.checkAccess(chatId, content.username, content.firstName);
+    if (!access.allowed) {
+      if (access.reason) {
+        await TelegramService.sendTextMessage(chatId, access.reason);
+      }
+      return;
+    }
+
     // Step 1: Ensure User exists in Postgres & retrieve active project (chatId is stored safely in User.phoneNumber field)
-    const user = await DatabaseService.getOrCreateUser(chatId, `Telegram User ${chatId.slice(-4)}`);
+    const user = await DatabaseService.getOrCreateUser(chatId, content.firstName || `Telegram User ${chatId.slice(-4)}`);
     const activeProject = await DatabaseService.getActiveProject(user.id);
 
     if (!activeProject) {
@@ -211,6 +237,9 @@ export class AgentRouter {
       },
     });
 
+    // Log prompt generation activity
+    await ActivityLogger.log(chatId, 'PROMPT_GENERATED', `Score: ${evaluation.overallScore}/100 - ${rawIdea.slice(0, 80)}`);
+
     // Update active session to point to this prompt for easy refinement
     await prisma.aiSession.create({
       data: {
@@ -253,8 +282,14 @@ export class AgentRouter {
   ): Promise<void> {
     if (actionId.startsWith('switch_proj_')) {
       const targetProjectId = actionId.replace('switch_proj_', '');
+      const project = await AuthorizationService.verifyProjectAccess(userId, targetProjectId, chatId);
+      if (!project) {
+        await TelegramService.sendTextMessage(chatId, '❌ Forbidden: You do not have access to this workspace.');
+        return;
+      }
       await prisma.project.updateMany({ where: { userId }, data: { isActive: false } });
       const updated = await prisma.project.update({ where: { id: targetProjectId }, data: { isActive: true } });
+      await ActivityLogger.log(chatId, 'PROJECT_SWITCHED', `Switched to workspace: ${updated.name}`);
       await TelegramService.sendTextMessage(chatId, `🚀 Workspace switched successfully to: *${updated.name}*.\nAll vector memory context loaded.`);
       return;
     }
@@ -266,25 +301,33 @@ export class AgentRouter {
 
     if (actionId.startsWith('refine_')) {
       const promptId = actionId.replace('refine_', '');
-      const promptRecord = await prisma.prompt.findUnique({ where: { id: promptId } });
+      const promptRecord = await AuthorizationService.verifyPromptAccess(userId, promptId, chatId);
+      if (!promptRecord) {
+        await TelegramService.sendTextMessage(chatId, '❌ Forbidden: Prompt ownership verification failed.');
+        return;
+      }
       await prisma.aiSession.create({
         data: {
           userId,
           currentState: 'WAITING_FOR_REFINEMENT',
-          contextData: { lastPromptId: promptId, lastPromptText: promptRecord?.optimizedText },
+          contextData: { lastPromptId: promptId, lastPromptText: promptRecord.optimizedText },
           expiresAt: new Date(Date.now() + 1800000),
         },
       });
+      await ActivityLogger.log(chatId, 'INTERACTIVE_ACTION', `Initiated refinement for prompt ${promptId}`);
       await TelegramService.sendTextMessage(chatId, '🛠️ *Prompt Refinement Mode*\nWhat adjustments would you like? (e.g., "Make it more professional", "Add error handling constraints", "Shorten it to 3 bullet points")');
       return;
     }
 
     if (actionId.startsWith('copy_')) {
       const promptId = actionId.replace('copy_', '');
-      const promptRecord = await prisma.prompt.findUnique({ where: { id: promptId } });
-      if (promptRecord) {
-        await TelegramService.sendTextMessage(chatId, promptRecord.optimizedText);
+      const promptRecord = await AuthorizationService.verifyPromptAccess(userId, promptId, chatId);
+      if (!promptRecord) {
+        await TelegramService.sendTextMessage(chatId, '❌ Forbidden: Prompt ownership verification failed.');
+        return;
       }
+      await ActivityLogger.log(chatId, 'INTERACTIVE_ACTION', `Copied raw text for prompt ${promptId}`);
+      await TelegramService.sendTextMessage(chatId, promptRecord.optimizedText);
       return;
     }
 
@@ -307,7 +350,11 @@ export class AgentRouter {
     const contextData: any = session?.contextData || {};
     const previousPrompt = contextData.lastPromptText || '';
 
-    const project = await prisma.project.findUnique({ where: { id: projectId } });
+    const project = await AuthorizationService.verifyProjectAccess(userId, projectId, chatId);
+    if (!project) {
+      await TelegramService.sendTextMessage(chatId, '❌ Forbidden: Workspace ownership verification failed.');
+      return;
+    }
     await TelegramService.sendTextMessage(chatId, '⚙️ Refining your prompt using your feedback and project rules...');
 
     const refined = await GenerationAgent.generatePrompt({
@@ -387,6 +434,7 @@ export class AgentRouter {
       },
     });
 
+    await ActivityLogger.log(chatId, 'PROJECT_CREATED', `Workspace: ${newProject.name}`);
     await prisma.aiSession.updateMany({ where: { userId }, data: { currentState: 'IDLE' } });
     await TelegramService.sendTextMessage(chatId, `🎉 Project *"${newProject.name}"* created and set as active workspace!\nAny documents, photos, or voice notes sent now will be embedded into this project's pgvector memory.`);
   }
@@ -494,6 +542,7 @@ export class AgentRouter {
       });
 
       const chunkCount = await MemoryService.ingestDocumentText(projectId, detectedFileName || `${mediaType}_${Date.now()}`, extractedText);
+      await ActivityLogger.log(chatId, 'FILE_UPLOADED', `Media Type: ${mediaType} - ${detectedFileName || 'unknown'}`);
       await TelegramService.sendTextMessage(
         chatId,
         `✅ Media processed successfully!\n*Extraction Method:* \`${extractionMethod}\` | *Chunks Stored:* ${chunkCount}\n*Extracted Context Snapshot:*\n"${extractedText.slice(0, 180)}..."\n\nVector embeddings generated and stored in *${projectName}* workspace.`
@@ -516,6 +565,7 @@ export class AgentRouter {
    */
   private static async handleSearchHistory(chatId: string, projectId: string, query: string): Promise<void> {
     const cleanQuery = query.replace('/search', '').trim();
+    await ActivityLogger.log(chatId, 'SEARCH_PERFORMED', cleanQuery);
     const prompts = await prisma.prompt.findMany({
       where: {
         message: { conversation: { projectId } },
