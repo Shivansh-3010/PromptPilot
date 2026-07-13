@@ -3,6 +3,11 @@
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Stack](https://img.shields.io/badge/stack-Node.js%20%7C%20TypeScript%20%7C%20Prisma%20%7C%20pgvector-blue.svg)]()
 [![Security](https://img.shields.io/badge/security-Invite--Only%20%7C%20Isolated-success.svg)]()
+[![AI](https://img.shields.io/badge/AI-Gemini%202.5%20Flash%20%7C%20Groq-orange.svg)]()
+[![Memory](https://img.shields.io/badge/Memory-pgvector%20RAG-purple.svg)]()
+[![Knowledge](https://img.shields.io/badge/Knowledge-Document%20Ingestion%20Enabled-blueviolet.svg)]()
+[![Platform](https://img.shields.io/badge/Platform-Telegram%20Bot-26A5E4.svg)]()
+[![Status](https://img.shields.io/badge/Status-Private%20Beta-success.svg)]()
 
 PromptPilot is a production-ready, multi-agent **AI Intent Translator and Prompt Architect** centered around Telegram. It transforms rough, unstructured human ideas into high-density, professional prompts using a 12-point framework, pgvector semantic memory, multi-modal file ingestion, and enterprise-grade **invite-only access control**.
 
